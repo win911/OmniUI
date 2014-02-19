@@ -51,6 +51,12 @@ import net.floodlightcontroller.core.annotations.LogMessageCategory;
 import net.floodlightcontroller.core.annotations.LogMessageDoc;
 import net.floodlightcontroller.storage.IStorageSourceService;
 
+import java.util.concurrent.Future;
+import org.openflow.protocol.OFStatisticsRequest;
+import java.util.concurrent.TimeUnit;
+import org.openflow.protocol.statistics.*;
+import org.openflow.protocol.OFPort;
+
 /**
  * Pushes a static flow entry to the storage source
  * @author alexreimers
@@ -172,6 +178,7 @@ public class FlowModResource extends ServerResource {
 					if(entriesFromStorage.get(switchid).get(entrynumber) != null)
 					{
 						FlowModMethod.writeFlowModToSwitch(HexString.toLong(switchid),entriesFromStorage.get(switchid).get(entrynumber));
+						if(trydelete!=true) status += isexitintable(floodlightProvider.getSwitch(HexString.toLong(switchid)),entriesFromStorage.get(switchid).get(entrynumber));
 					}
 				}
 			}
@@ -183,7 +190,7 @@ public class FlowModResource extends ServerResource {
 				else return ("{\"status\" : \"" + "Flow Deleted Failed" +"\"}");
 			}
 			else return ("{\"status\" : \"" + status +"\"}");
-			
+
         } catch (IOException e) {
             log.error("Error parsing push flow mod request: " + fmJson, e);
             return "{\"status\" : \"Error! Could not parse flod mod, see log for details.\"}";
@@ -205,8 +212,173 @@ public class FlowModResource extends ServerResource {
             }
         }
     }
-	static boolean removed = false, trydelete = false;
+	static boolean removed = false, trydelete = false, addmod=false;
     static void setMsg(){
 		removed = true;
 	}
+	
+	public List<OFStatistics> value;
+	public List<OFFlowStatisticsReply> flowList;
+	
+	public String isexitintable(IOFSwitch ofSwitch, OFFlowMod flowMod){
+		OFStatisticsType type = OFStatisticsType.FLOW;
+        if (ofSwitch == null) {
+            return " error,no this switch." ;
+        }
+		Future<List<OFStatistics>> future;
+		OFStatisticsRequest req = new OFStatisticsRequest();
+		req.setStatisticType(type);
+		int requestLength = req.getLengthU();
+		
+		OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
+	    OFMatch match = new OFMatch();
+		match.setWildcards(0xffffffff);
+        specificReq.setMatch(match);
+        specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
+    	specificReq.setTableId((byte) 0xff);
+	    req.setStatistics(Collections.singletonList((OFStatistics)specificReq));
+	    requestLength += specificReq.getLength();
+		req.setLengthU(requestLength);
+		
+		try{
+			future = ofSwitch.queryStatistics(req);
+			value = future.get(10,TimeUnit.SECONDS);
+			
+			flowList = new ArrayList<OFFlowStatisticsReply>(value.size());
+			for(OFStatistics ofs: value){
+				flowList.add( ((OFFlowStatisticsReply)ofs));
+			}
+			
+			String msggg3="",msggg4="",msggg5="";
+			for(OFFlowStatisticsReply flow: flowList){
+				/*if(flow.getMatch().equals(flowMod.getMatch()) && flow.getCookie() == flowMod.getCookie()
+                && flow.getPriority() == flowMod.getPriority() && flow.getActions().equals(flowMod.getActions())
+				&& flow.getHardTimeout() == flowMod.getHardTimeout() && flow.getIdleTimeout() == flowMod.getIdleTimeout()){
+					return " match OK.";
+				}*/
+				
+				// All Match 
+				String msggg="",msggg2="";
+				msggg+=flow.getMatch();
+				msggg2+=flowMod.getMatch();
+				if(msggg.equals(msggg2)){	
+					msggg="";msggg2="";
+					msggg+=flow.getCookie();
+					msggg2+=flowMod.getCookie();
+					if(msggg.equals(msggg2)){	
+						msggg="";msggg2="";
+						msggg+=flow.getPriority();
+						msggg2+=flowMod.getPriority();
+						if(msggg.equals(msggg2)){
+							msggg="";msggg2="";
+							msggg+=flow.getActions();
+							msggg2+=flowMod.getActions();
+							if(msggg.equals(msggg2)){
+								addmod=false;
+								return " OK.";	//MOD_ST ADD/MOD
+							}
+						}
+					}	
+				}
+				
+				// For Mod not all match
+				if(addmod==true){
+					//addmod=false;
+					OFMatch M1,M2;
+					M1=flow.getMatch();
+					M2=flowMod.getMatch();
+					
+					String pam="",pam2="";
+					pam+=M1.getInputPort();
+					pam2+=M2.getInputPort();
+					if(!pam2.equals("0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=HexString.toHexString(M1.getDataLayerDestination());
+					pam2+=HexString.toHexString(M2.getDataLayerDestination());
+					if(!pam2.equals("00:00:00:00:00:00")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=HexString.toHexString(M1.getDataLayerSource());
+					pam2+=HexString.toHexString(M2.getDataLayerSource());
+					if(!pam2.equals("00:00:00:00:00:00")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=M1.getDataLayerType();
+					pam2+=M2.getDataLayerType();
+					if(!pam2.equals("0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					/*pam="";pam2="";
+					pam+=M1.getDataLayerVirtualLan();
+					pam2+=M2.getDataLayerVirtualLan();
+					//msggg3+=pam;	/////
+					//msggg4+=pam2;	/////
+					if(!pam2.equals("0")){
+						if(!pam2.equals(pam)) continue;
+					}//else msggg5="vlan = 0";*/
+					pam="";pam2="";
+					pam+=intToIp(M1.getNetworkDestination());
+					pam2+=intToIp(M2.getNetworkDestination());
+					if(!pam2.equals("0.0.0.0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=M1.getNetworkProtocol();
+					pam2+=M2.getNetworkProtocol();
+					if(!pam2.equals("0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=intToIp(M1.getNetworkSource());
+					pam2+=intToIp(M2.getNetworkSource());
+					if(!pam2.equals("0.0.0.0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=M1.getNetworkTypeOfService();
+					pam2+=M2.getNetworkTypeOfService();
+					if(!pam2.equals("0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=M1.getTransportDestination();
+					pam2+=M2.getTransportDestination();
+					if(!pam2.equals("0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					pam="";pam2="";
+					pam+=M1.getTransportSource();
+					pam2+=M2.getTransportSource();
+					if(!pam2.equals("0")){
+						if(!pam2.equals(pam)) continue;
+					}
+					// Actions
+					pam="";pam2="";
+					pam+=flow.getActions();
+					pam2+=flowMod.getActions();
+					if(!pam2.equals(pam)){
+						continue;
+						//return " Failed.";
+					}
+					return " OK."; //MOD
+				}
+			}
+			addmod=false;
+			//return " match Failed. "+msggg3+" "+msggg4+" "+msggg5;
+			return " Failed.";
+		}catch (Exception e){
+			log.error("err = {}",e.toString());
+			return "Exception error";
+		}
+	}
+	private String intToIp(int i) {
+        return ((i >> 24 ) & 0xFF) + "." +
+               ((i >> 16 ) & 0xFF) + "." +
+               ((i >>  8 ) & 0xFF) + "." +
+               ( i        & 0xFF);
+    }
 }

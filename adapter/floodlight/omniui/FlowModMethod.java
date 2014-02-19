@@ -184,24 +184,25 @@ public class FlowModMethod {
                                     Integer.valueOf((String) row.get(FlowModResource.COLUMN_COOKIE))));
                 } else if (key.equals(FlowModResource.COLUMN_PRIORITY)) {
                     flowMod.setPriority(U16.t(Integer.valueOf((String) row.get(FlowModResource.COLUMN_PRIORITY))));
-				} else if(key.equals("of_command")) {
+				} else if(key.equals("of_command")){
 					String commandna = (String) row.get("of_command");
-					if(commandna.equals("ADD"))
+					if(commandna.equals("ADD")){
 						flowMod.setCommand(OFFlowMod.OFPFC_ADD);
-					else if(commandna.equals("DEL")){
+						FlowModResource.addmod=true;
+					}else if(commandna.equals("DEL")){
 						flowMod.setCommand(OFFlowMod.OFPFC_DELETE);
 						FlowModResource.trydelete=true;
-					}	
-					else if(commandna.equals("MOD_ST"))
+					}else if(commandna.equals("MOD_ST"))
 						flowMod.setCommand(OFFlowMod.OFPFC_MODIFY_STRICT);
 					else if(commandna.equals("DEL_ST")){
 						flowMod.setCommand(OFFlowMod.OFPFC_DELETE_STRICT);
 						FlowModResource.trydelete=true;
-					}
-					else
+					}else{
 						flowMod.setCommand(OFFlowMod.OFPFC_MODIFY);
+						FlowModResource.addmod=true;
+					}
 						
-                } else { // the rest of the keys are for OFMatch().fromString()
+                }else{ // the rest of the keys are for OFMatch().fromString()
                     if (matchString.length() > 0)
                         matchString.append(",");
                     matchString.append(key + "=" + row.get(key).toString());
