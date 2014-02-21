@@ -273,7 +273,7 @@ public class FlowModResource extends ServerResource {
 							msggg="";msggg2="";
 							msggg+=flow.getActions();
 							msggg2+=flowMod.getActions();
-							if(msggg.equals(msggg2)){
+							if(msggg.equals(msggg2)||(msggg.equals("[]")&&msggg2.equals("null"))){
 								addmod=false;
 								return " OK.";	//MOD_ST ADD/MOD
 							}
@@ -283,7 +283,6 @@ public class FlowModResource extends ServerResource {
 				
 				// For Mod not all match
 				if(addmod==true){
-					//addmod=false;
 					OFMatch M1,M2;
 					M1=flow.getMatch();
 					M2=flowMod.getMatch();
@@ -312,17 +311,21 @@ public class FlowModResource extends ServerResource {
 					if(!pam2.equals("0")){
 						if(!pam2.equals(pam)) continue;
 					}
-					/*pam="";pam2="";
+					pam="";pam2="";
 					pam+=M1.getDataLayerVirtualLan();
 					pam2+=M2.getDataLayerVirtualLan();
-					//msggg3+=pam;	/////
-					//msggg4+=pam2;	/////
+					//msggg3+=pam;	//
+					//msggg4+=pam2;	//
 					if(!pam2.equals("0")){
-						if(!pam2.equals(pam)) continue;
-					}//else msggg5="vlan = 0";*/
+						if(!pam2.equals(pam)){
+							if(!(pam2.equals("-1")&&pam.equals("0"))) continue;
+						}
+					}
 					pam="";pam2="";
 					pam+=intToIp(M1.getNetworkDestination());
 					pam2+=intToIp(M2.getNetworkDestination());
+					//msggg3+=pam;	//
+					//msggg4+=pam2;	//
 					if(!pam2.equals("0.0.0.0")){
 						if(!pam2.equals(pam)) continue;
 					}
@@ -361,7 +364,7 @@ public class FlowModResource extends ServerResource {
 					pam+=flow.getActions();
 					pam2+=flowMod.getActions();
 					if(!pam2.equals(pam)){
-						continue;
+							if(!(pam.equals("[]")&&pam2.equals("null"))) continue;
 						//return " Failed.";
 					}
 					return " OK."; //MOD
